@@ -187,17 +187,9 @@ func (t *transformer) countNumber(c, node *nokogiri.Node) int {
 	level := c.Attribute("level")
 	name := node.NodeName()
 	if level == "any" {
+		// Count every element of the same name up to and including node, in
+		// document order.
 		count := 0
-		t.walk(&t.src.Node, func(n *nokogiri.Node) {
-			if n.NodeType() == nokogiri.ElementNode && n.NodeName() == name {
-				count++
-				if n == node {
-					// mark by making count final via panic-free capture
-				}
-			}
-		})
-		// Recount up to and including node.
-		count = 0
 		done := false
 		t.walk(&t.src.Node, func(n *nokogiri.Node) {
 			if done {

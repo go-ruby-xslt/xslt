@@ -103,11 +103,11 @@ func (t *transformer) execXSL(c, node *nokogiri.Node, pos, size int, out *nokogi
 
 func (t *transformer) doValueOf(c *nokogiri.Node, out *nokogiri.Node, ec *evalCtx) {
 	s := t.evalString(c.Attribute("select"), ec)
-	if c.Attribute("disable-output-escaping") == "yes" {
-		// We do not distinguish escaped/unescaped text in the tree; the value is
-		// still emitted. Full d-o-e would need a raw-text node kind.
+	// An empty value adds no text node, so an otherwise-empty result element
+	// self-closes exactly as libxslt serializes it.
+	if s != "" {
+		out.AddChild(t.result.NewText(s))
 	}
-	out.AddChild(t.result.NewText(s))
 }
 
 func (t *transformer) doText(c *nokogiri.Node, out *nokogiri.Node) {
@@ -251,10 +251,7 @@ func (t *transformer) deepCopy(n, out *nokogiri.Node) {
 
 func (t *transformer) doElement(c, node *nokogiri.Node, pos, size int, out *nokogiri.Node, ec *evalCtx) {
 	name := t.avt(c.Attribute("name"), ec)
-	nsURI := c.Attribute("namespace")
-	if nsAVT := c.Attribute("namespace"); nsAVT != "" {
-		nsURI = t.avt(nsAVT, ec)
-	}
+	nsURI := t.avt(c.Attribute("namespace"), ec)
 	prefix, _ := splitQName(name)
 	el := t.newResultElement(name, prefix, nsURI)
 	out.AddChild(el)

@@ -77,8 +77,6 @@ func fail(format string, a ...any) { panic(xsltError(fmt.Sprintf(format, a...)))
 // bindGlobals evaluates the top-level variables and params (params overridden by
 // the caller-supplied values), in document order.
 func (t *transformer) bindGlobals(params map[string]any) {
-	ctx := &nokogiri.Node{}
-	_ = ctx
 	for _, g := range t.ss.globals {
 		if g.isPart {
 			if v, ok := params[g.name]; ok {

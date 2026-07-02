@@ -150,9 +150,6 @@ func formatXPathNumber(f float64) string {
 	case math.IsInf(f, -1):
 		return "-Infinity"
 	}
-	if f == math.Trunc(f) && math.Abs(f) < 1e21 {
-		return strconv.FormatFloat(f, 'f', -1, 64)
-	}
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
