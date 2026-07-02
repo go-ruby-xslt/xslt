@@ -11,6 +11,15 @@ import (
 	"github.com/go-ruby-nokogiri/nokogiri"
 )
 
+func mustXML(t *testing.T, src string) *nokogiri.Document {
+	t.Helper()
+	doc, err := nokogiri.XML(src)
+	if err != nil {
+		t.Fatalf("parse source: %v", err)
+	}
+	return doc
+}
+
 func mustApply(t *testing.T, xsl, src string, params map[string]any) string {
 	t.Helper()
 	ss, err := ParseString(xsl)
