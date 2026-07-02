@@ -30,7 +30,7 @@
 // choose/when/otherwise, variable/param/with-param, copy/copy-of,
 // element/attribute/text/comment/processing-instruction, attribute-set, sort,
 // number, key/key(), literal result elements with attribute-value templates,
-// namespace handling and exclude-result-prefixes, xsl:output, and the XSLT
+// namespace handling on result elements, xsl:output, and the XSLT
 // function library (document, key, format-number with decimal-format, current,
 // generate-id, system-property, element-available, function-available,
 // unparsed-entity-uri). xsl:decimal-format is honoured by format-number.
