@@ -38,6 +38,16 @@ func (t *transformer) branchMatches(branch string, n *nokogiri.Node) bool {
 	if strings.HasPrefix(branch, "id(") || strings.HasPrefix(branch, "key(") {
 		return t.selectedContains(branch, &t.src.Node, n)
 	}
+	// An attribute pattern (last step begins with @) matches an attribute node.
+	// Nokogiri does not surface attribute nodes with stable identity across
+	// evaluations, so we test the attribute directly against the last step and,
+	// where the pattern has a prefix (a/@x), test the parent element against it.
+	if lastStepIsAttr(branch) {
+		return t.attrBranchMatches(branch, n)
+	}
+	if n.NodeType() == nokogiri.AttributeNode {
+		return false // a non-attribute pattern never matches an attribute node
+	}
 	// Build an absolute selection that yields every node the pattern can match,
 	// then test membership. A leading "/" is already absolute; "//x" and "x" both
 	// become "//"-anchored so we gather all candidates document-wide.
@@ -52,6 +62,77 @@ func (t *transformer) branchMatches(branch string, n *nokogiri.Node) bool {
 	}
 	root := &t.src.Node
 	return t.selectedContains(abs, root, n)
+}
+
+// lastStepIsAttr reports whether the final step of a pattern is an attribute test.
+func lastStepIsAttr(branch string) bool {
+	last := branch
+	if i := lastUnbracketedSlash(branch); i >= 0 {
+		last = branch[i+1:]
+	}
+	return strings.HasPrefix(strings.TrimSpace(last), "@")
+}
+
+// attrBranchMatches tests an attribute pattern (…/@name or @name or @*) against n.
+func (t *transformer) attrBranchMatches(branch string, n *nokogiri.Node) bool {
+	if n.NodeType() != nokogiri.AttributeNode {
+		return false
+	}
+	i := lastUnbracketedSlash(branch)
+	last := strings.TrimSpace(branch)
+	prefix := ""
+	if i >= 0 {
+		last = strings.TrimSpace(branch[i+1:])
+		prefix = strings.TrimSpace(branch[:i])
+	}
+	name := strings.TrimSpace(strings.TrimPrefix(last, "@"))
+	// Match the attribute's (qualified) name.
+	if name != "*" && name != n.NodeName() && name != n.Name {
+		return false
+	}
+	if prefix == "" {
+		return true
+	}
+	// The parent element must match the remaining prefix pattern. Strip a trailing
+	// "//" or "/" that terminated the prefix; then match the owning element.
+	prefix = strings.TrimSuffix(prefix, "/")
+	parent := n.Parent()
+	if parent == nil {
+		return false
+	}
+	if prefix == "" {
+		return true
+	}
+	return t.branchMatches(prefix, parent)
+}
+
+// lastUnbracketedSlash returns the index of the last "/" not inside [] or ().
+func lastUnbracketedSlash(s string) int {
+	depthB, depthP := 0, 0
+	var quote byte
+	last := -1
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			}
+		case c == '\'' || c == '"':
+			quote = c
+		case c == '[':
+			depthB++
+		case c == ']':
+			depthB--
+		case c == '(':
+			depthP++
+		case c == ')':
+			depthP--
+		case c == '/' && depthB == 0 && depthP == 0:
+			last = i
+		}
+	}
+	return last
 }
 
 // selectedContains evaluates expr from origin and reports whether n is a member
