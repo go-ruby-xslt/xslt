@@ -101,9 +101,6 @@ func (sr *serializer) node(n *nokogiri.Node, depth int) {
 
 func (sr *serializer) element(n *nokogiri.Node, depth int) {
 	name := n.NodeName()
-	if sr.indent && sr.hasElementChildren(n) {
-		sr.out.WriteString(strings.Repeat("  ", depth))
-	}
 	sr.out.WriteString("<" + name)
 	sr.writeNamespaceDecls(n)
 	for _, a := range n.Attrs {
@@ -130,21 +127,20 @@ func (sr *serializer) element(n *nokogiri.Node, depth int) {
 		return
 	}
 	sr.out.WriteString(">")
+	// Indent only element-bearing content; mixed/text content is emitted inline so
+	// significant whitespace is not altered.
 	indented := sr.indent && sr.hasElementChildren(n)
-	if indented {
-		sr.out.WriteString("\n")
-	}
 	for c := n.FirstChild(); c != nil; c = c.Next() {
-		if indented && !c.IsElement() && isWhitespaceOnly(textOf(c)) {
-			continue
+		if indented {
+			if !c.IsElement() && isWhitespaceOnly(textOf(c)) {
+				continue
+			}
+			sr.out.WriteString("\n" + strings.Repeat("  ", depth+1))
 		}
 		sr.node(c, depth+1)
-		if indented {
-			sr.out.WriteString("\n")
-		}
 	}
 	if indented {
-		sr.out.WriteString(strings.Repeat("  ", depth))
+		sr.out.WriteString("\n" + strings.Repeat("  ", depth))
 	}
 	sr.out.WriteString("</" + name + ">")
 }

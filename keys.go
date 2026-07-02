@@ -59,6 +59,44 @@ func (t *transformer) keyLookup(name, value string) []*nokogiri.Node {
 	return idx[value]
 }
 
+// stripSourceSpace removes whitespace-only text nodes from the source per the
+// stylesheet's xsl:strip-space / xsl:preserve-space declarations (default: no
+// element is stripped). preserve-space and specific element names override the
+// strip-all "*" default.
+func (t *transformer) stripSourceSpace() {
+	if !t.ss.stripAll && len(t.ss.stripSpc) == 0 {
+		return
+	}
+	var visit func(*nokogiri.Node)
+	visit = func(n *nokogiri.Node) {
+		if n.NodeType() == nokogiri.ElementNode && t.stripsChildren(n.NodeName()) {
+			for c := n.FirstChild(); c != nil; {
+				next := c.Next()
+				if (c.IsText() || c.IsCDATA()) && isWhitespaceOnly(c.Content()) {
+					c.Remove()
+				}
+				c = next
+			}
+		}
+		for c := n.FirstChild(); c != nil; c = c.Next() {
+			visit(c)
+		}
+	}
+	visit(&t.src.Node)
+}
+
+// stripsChildren reports whether whitespace-only text children of an element with
+// the given name are stripped.
+func (t *transformer) stripsChildren(name string) bool {
+	if t.ss.preserve[name] {
+		return false
+	}
+	if t.ss.stripSpc[name] {
+		return true
+	}
+	return t.ss.stripAll
+}
+
 // walk visits n and its element/text descendants (and attributes) in document
 // order, invoking fn on each.
 func (t *transformer) walk(n *nokogiri.Node, fn func(*nokogiri.Node)) {

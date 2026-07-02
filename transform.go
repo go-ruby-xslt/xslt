@@ -59,6 +59,7 @@ func (t *transformer) run(params map[string]any) (err error) {
 			panic(r)
 		}
 	}()
+	t.stripSourceSpace()
 	t.buildKeys()
 	t.bindGlobals(params)
 	// Process the source document root with the default (empty) mode.
