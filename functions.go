@@ -19,10 +19,8 @@ func (t *transformer) callXSLTFunc(name string, args []any, ec *evalCtx) (any, b
 		return t.fnKey(args), true
 	case "format-number":
 		return t.fnFormatNumber(args), true
-	case "current":
-		// current() is handled by the engine via XPathContext.Current, but XSLT
-		// code may still route through here in unusual contexts.
-		return nokogiri.NewNodeSet([]*nokogiri.Node{ec.current}), true
+	// current() is resolved by the engine itself via XPathContext.Current before
+	// the extension hook is consulted, so it never reaches here.
 	case "generate-id":
 		return t.fnGenerateID(args, ec), true
 	case "system-property":

@@ -199,8 +199,10 @@ func (t *transformer) doCopy(c, node *nokogiri.Node, pos, size int, out *nokogir
 		t.execChildren(c, node, pos, size, el)
 	case nokogiri.DocumentNode:
 		t.execChildren(c, node, pos, size, out)
-	case nokogiri.TextNode, nokogiri.CDATANode:
+	case nokogiri.TextNode:
 		out.AddChild(t.result.NewText(node.Content()))
+	case nokogiri.CDATANode:
+		out.AddChild(t.result.NewCDATA(node.Content()))
 	case nokogiri.CommentNode:
 		out.AddChild(t.result.NewComment(node.Content()))
 	case nokogiri.ProcessingInstructionNode:
@@ -234,8 +236,10 @@ func (t *transformer) deepCopy(n, out *nokogiri.Node) {
 		for ch := n.FirstChild(); ch != nil; ch = ch.Next() {
 			t.deepCopy(ch, el)
 		}
-	case nokogiri.TextNode, nokogiri.CDATANode:
+	case nokogiri.TextNode:
 		out.AddChild(t.result.NewText(n.Content()))
+	case nokogiri.CDATANode:
+		out.AddChild(t.result.NewCDATA(n.Content()))
 	case nokogiri.CommentNode:
 		out.AddChild(t.result.NewComment(n.Content()))
 	case nokogiri.ProcessingInstructionNode:
