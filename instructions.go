@@ -18,6 +18,15 @@ func (t *transformer) execChildren(elem, node *nokogiri.Node, pos, size int, out
 	}
 }
 
+// execScopedChildren runs a sequence constructor in its own variable scope, so
+// xsl:variable bindings inside a block (xsl:if / xsl:when / xsl:otherwise) are
+// visible only within that block, per XSLT 11.4.
+func (t *transformer) execScopedChildren(elem, node *nokogiri.Node, pos, size int, out *nokogiri.Node) {
+	t.pushScope()
+	t.execChildren(elem, node, pos, size, out)
+	t.popScope()
+}
+
 // execNode runs a single instruction / literal / text node.
 func (t *transformer) execNode(c, node *nokogiri.Node, pos, size int, out *nokogiri.Node) {
 	ec := &evalCtx{node: node, pos: pos, size: size, current: node}
@@ -58,7 +67,7 @@ func (t *transformer) execXSL(c, node *nokogiri.Node, pos, size int, out *nokogi
 		t.doForEach(c, out, ec)
 	case "if":
 		if t.evalBool(c.Attribute("test"), ec) {
-			t.execChildren(c, node, pos, size, out)
+			t.execScopedChildren(c, node, pos, size, out)
 		}
 	case "choose":
 		t.doChoose(c, node, pos, size, out, ec)
@@ -125,11 +134,13 @@ func (t *transformer) doText(c *nokogiri.Node, out *nokogiri.Node) {
 func (t *transformer) doForEach(c *nokogiri.Node, out *nokogiri.Node, ec *evalCtx) {
 	nodes := t.selectNodes(c.Attribute("select"), ec)
 	nodes = t.applySorts(c, nodes, ec)
-	t.pushScope()
-	defer t.popScope()
 	size := len(nodes)
 	for i, n := range nodes {
+		// Each iteration is its own variable scope: a variable bound in one
+		// iteration is not visible in the next (nor after the loop).
+		t.pushScope()
 		t.execChildren(c, n, i+1, size, out)
+		t.popScope()
 	}
 }
 
@@ -141,11 +152,11 @@ func (t *transformer) doChoose(c, node *nokogiri.Node, pos, size int, out *nokog
 		switch w.Name {
 		case "when":
 			if t.evalBool(w.Attribute("test"), ec) {
-				t.execChildren(w, node, pos, size, out)
+				t.execScopedChildren(w, node, pos, size, out)
 				return
 			}
 		case "otherwise":
-			t.execChildren(w, node, pos, size, out)
+			t.execScopedChildren(w, node, pos, size, out)
 			return
 		}
 	}

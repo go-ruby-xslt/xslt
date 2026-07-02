@@ -97,14 +97,20 @@ func (t *transformer) stripsChildren(name string) bool {
 	return t.ss.stripAll
 }
 
-// walk visits n and its element/text descendants (and attributes) in document
-// order, invoking fn on each.
+// walk visits n and its descendants — including attribute nodes — in document
+// order, invoking fn on each. Attribute nodes are fetched via the @* axis so an
+// xsl:key whose match targets attributes (match="@id") and attribute-matching
+// templates see them.
 func (t *transformer) walk(n *nokogiri.Node, fn func(*nokogiri.Node)) {
 	fn(n)
-	for _, a := range n.Attrs {
-		// Attribute nodes are synthesised lazily; represent them via a shim so
-		// patterns like @id match. We reuse the source node's attribute set.
-		_ = a
+	if n.NodeType() == nokogiri.ElementNode && len(n.Attrs) > 0 {
+		if v, err := n.EvalXPathCtx("@*", t.ss.nsMap, nil); err == nil {
+			if ns, ok := v.(*nokogiri.NodeSet); ok {
+				for _, a := range ns.Nodes() {
+					fn(a)
+				}
+			}
+		}
 	}
 	for c := n.FirstChild(); c != nil; c = c.Next() {
 		t.walk(c, fn)
