@@ -92,10 +92,10 @@ func (t *transformer) execXSL(c, node *nokogiri.Node, pos, size int, out *nokogi
 	case "fallback":
 		// Only executed when its parent instruction is not available; here every
 		// implemented instruction ignores it.
-	case "param":
-		// A top-of-template param already handled by instantiate; a stray one binds
-		// its default.
-		t.vars[c.Attribute("name")] = t.evalVariable(compileVariable(c, 0), node)
+	case "sort", "param", "with-param":
+		// Declarations handled by their owning instruction (for-each/apply-templates
+		// sort keys, template params, call-template arguments); they are not
+		// sequence-constructor instructions and produce no output here.
 	default:
 		fail("xslt: unsupported instruction xsl:%s", c.Name)
 	}

@@ -30,6 +30,8 @@ func (t *transformer) eval(expr string, ec *evalCtx) any {
 		Vars:        t.vars,
 		ResolveFunc: t.makeResolver(ec),
 		Current:     ec.current,
+		Position:    ec.pos,
+		Size:        ec.size,
 	}
 	v, err := ec.node.EvalXPathCtx(expr, t.ss.nsMap, xc)
 	if err != nil {
