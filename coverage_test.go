@@ -130,6 +130,11 @@ func TestFormatNumberEdges(t *testing.T) {
 	cases := []struct{ num, pat, want string }{
 		{"0", "0", "0"},
 		{"-5", "0.0;(0.0)", "(5.0)"},
+		// Negative value with no explicit negative subpattern: the default
+		// minus sign is prepended (number.go negative && neg == "" branch).
+		// Covered deterministically here so it does not depend on the libxslt
+		// oracle running (which CI's ruby<4.0 lanes skip).
+		{"-42", "0.0", "-42.0"},
 		{"1000000", "#,##0", "1,000,000"},
 		{"0.5", "0%", "50%"},
 		{"3.14159", "0.00", "3.14"},
