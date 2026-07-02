@@ -67,11 +67,9 @@ func formatNumber(num float64, pattern string, df *decimalFormat) string {
 
 	var fracStr string
 	if maxFrac > 0 {
-		f := strconv.FormatFloat(fracVal, 'f', maxFrac, 64)
-		f = strings.TrimPrefix(f, "0.")
-		if !strings.Contains(strconv.FormatFloat(fracVal, 'f', maxFrac, 64), ".") {
-			f = ""
-		}
+		// fracVal is in [0,1); formatting with maxFrac>0 digits always yields
+		// "0.ddd", so trimming the "0." prefix leaves just the fraction digits.
+		f := strings.TrimPrefix(strconv.FormatFloat(fracVal, 'f', maxFrac, 64), "0.")
 		// Trim optional trailing digits below minFrac.
 		for len(f) > minFrac && strings.HasSuffix(f, "0") {
 			f = f[:len(f)-1]

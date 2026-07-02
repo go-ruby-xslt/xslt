@@ -299,9 +299,8 @@ func (t *transformer) execLiteral(c, node *nokogiri.Node, pos, size int, out *no
 		t.applyAttributeSets(u, node, el)
 	}
 	for _, a := range c.Attrs {
-		if a.Prefix == "xmlns" || a.Name == "xmlns" {
-			continue
-		}
+		// Namespace declarations never appear here: the parser keeps them out of
+		// Attrs (they live in the element's namespace-declaration list).
 		if a.Namespace == xslNS {
 			continue // xsl:-namespaced attrs (use-attribute-sets) are directives
 		}

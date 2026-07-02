@@ -353,13 +353,16 @@ func (s *Stylesheet) finalize() {
 	}
 	sort.SliceStable(s.templates, func(i, j int) bool {
 		a, b := s.templates[i], s.templates[j]
-		if a.imprec != b.imprec {
-			return a.imprec > b.imprec
+		// Conflict resolution: higher import precedence first (xsl:import is deferred,
+		// so imprec is 0 for all templates today and this key is neutral), then higher
+		// priority, then later document position (XSLT recovery for a true tie).
+		if k := a.imprec - b.imprec; k != 0 {
+			return k > 0
 		}
 		if a.priority != b.priority {
 			return a.priority > b.priority
 		}
-		return a.order > b.order // later-in-document wins ties (XSLT recovery)
+		return a.order > b.order
 	})
 }
 

@@ -87,23 +87,17 @@ func (t *transformer) attrBranchMatches(branch string, n *nokogiri.Node) bool {
 	}
 	name := strings.TrimSpace(strings.TrimPrefix(last, "@"))
 	// Match the attribute's (qualified) name.
-	if name != "*" && name != n.NodeName() && name != n.Name {
+	if name != "*" && name != n.NodeName() {
 		return false
 	}
-	if prefix == "" {
-		return true
-	}
-	// The parent element must match the remaining prefix pattern. Strip a trailing
-	// "//" or "/" that terminated the prefix; then match the owning element.
+	// Strip a trailing separator; an empty remaining prefix means the attribute's
+	// name alone determines the match.
 	prefix = strings.TrimSuffix(prefix, "/")
-	parent := n.Parent()
-	if parent == nil {
-		return false
-	}
 	if prefix == "" {
 		return true
 	}
-	return t.branchMatches(prefix, parent)
+	// The parent element must match the remaining prefix pattern.
+	return t.branchMatches(prefix, n.Parent())
 }
 
 // lastUnbracketedSlash returns the index of the last "/" not inside [] or ().
