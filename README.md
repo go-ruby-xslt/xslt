@@ -48,15 +48,45 @@ Nokogiri::XSLT(stylesheet).apply_to(doc)    # -> serialized string == ss.Apply
 Stylesheet parameters are passed as a `map[string]any` whose values are `string`,
 `float64`, `bool` or `*nokogiri.NodeSet`.
 
+### Multi-document stylesheets (`xsl:include` / `xsl:import`)
+
+`xsl:include` and `xsl:import` are fully supported. Because fetching the
+referenced stylesheet is a policy decision (in-memory bundle, filesystem,
+network), it goes through a **`Resolver`** seam rather than assuming a
+filesystem:
+
+```go
+res := xslt.MapResolver{                         // in-memory; no filesystem
+    "base.xsl": baseStylesheetXML,
+}
+ss, _ := xslt.ParseStringWithResolver(mainXML, res)   // or ParseWithResolver(doc, res)
+```
+
+- **`xsl:include`** splices the included stylesheet's templates, variables,
+  keys, etc. at the **same import precedence** as the including stylesheet.
+- **`xsl:import`** brings them in at a **lower import precedence**; a later
+  import outranks an earlier one, and an importing stylesheet outranks everything
+  it imports (XSLT 1.0 §2.6.2). Conflicts resolve by **import precedence →
+  priority → document order**, and **`xsl:apply-imports`** re-applies the current
+  node against the matching rule of next-lower precedence in the current mode.
+- Provide a `Resolver` (`MapResolver`, `ResolverFunc`, or your own) — a
+  stylesheet that references include/import with no resolver configured fails to
+  compile with a clear error rather than silently dropping the reference.
+  `Resolve(href, base)` also returns a base URI so nested relative references
+  resolve correctly.
+
 ## XSLT 1.0 coverage
 
 Stylesheet structure and template rules:
 
 - `xsl:stylesheet` / `xsl:transform` (version, namespaces); literal-result-element
   stylesheets (a root element carrying `xsl:version`).
+- `xsl:include` / `xsl:import` (multi-document stylesheets via the `Resolver`
+  seam — see below), with full import-precedence conflict resolution.
 - Template rules: `match`, `name`, `priority`, `mode`; conflict resolution by
   **import precedence → priority → document order**; the built-in default template
-  rules for every node kind; `xsl:apply-imports` (single-document fallback).
+  rules for every node kind; `xsl:apply-imports` (re-applies the next-lower
+  import precedence rule).
 
 Instructions:
 
@@ -77,13 +107,14 @@ Instructions:
   `system-property`, `element-available`, `function-available`,
   `unparsed-entity-uri`
 
-### What's deferred
+### Out of scope
 
-> This is a **1.0** processor. **XSLT 2.0 / XPath 2.0** (sequences, `xsl:function`,
-> `xsl:for-each-group`, schema awareness, tunnel params) is out of scope.
-> `document()` of an **external** URI and multi-document `xsl:import` /
-> `xsl:include` need a URI resolver and are deferred (they compile to no-ops so
-> stylesheets that reference them still load); `disable-output-escaping` is
+> This is a **1.0** processor. **XSLT 2.0 / XPath 2.0** features are genuinely
+> outside the XSLT 1.0 specification and are therefore out of scope — they are not
+> faked: sequences and the XPath 2.0 data model, `xsl:function`,
+> `xsl:for-each-group` (grouping), schema-aware processing (`xsl:import-schema`,
+> type annotations), and tunnel parameters. `document()` of an **external** URI
+> still needs a URI resolver and is not wired up; `disable-output-escaping` is
 > accepted but emits normally.
 
 ## Built on go-ruby-nokogiri

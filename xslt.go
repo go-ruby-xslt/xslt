@@ -23,9 +23,11 @@
 //
 // # Coverage
 //
-// The engine implements XSLT 1.0: xsl:stylesheet/transform, template rules
-// (match/name/priority/mode), apply-templates/call-template/apply-imports with
-// conflict resolution by import precedence then priority, the built-in default
+// The engine implements XSLT 1.0: xsl:stylesheet/transform, xsl:include and
+// xsl:import (multi-document stylesheets, fetched through a [Resolver]) with full
+// import-precedence conflict resolution, template rules (match/name/priority/
+// mode), apply-templates/call-template/apply-imports with conflict resolution by
+// import precedence then priority then document order, the built-in default
 // template rules, and the instruction set: value-of, for-each, if,
 // choose/when/otherwise, variable/param/with-param, copy/copy-of,
 // element/attribute/text/comment/processing-instruction, attribute-set, sort,
@@ -35,8 +37,21 @@
 // generate-id, system-property, element-available, function-available,
 // unparsed-entity-uri). xsl:decimal-format is honoured by format-number.
 //
-// XSLT 2.0 / XPath 2.0 features (sequences, xsl:function, xsl:for-each-group,
-// schema awareness, tunnel params) are out of scope: this is a 1.0 processor.
+// # Resolving xsl:include / xsl:import
+//
+// Fetching the stylesheet referenced by an xsl:include or xsl:import is done
+// through the [Resolver] seam, so compilation needs no filesystem or network of
+// its own. Use [ParseStringWithResolver] / [ParseWithResolver] and pass a
+// [MapResolver] (in-memory), a [ResolverFunc], or a custom Resolver. Plain
+// [ParseString] / [Parse] have no resolver and reject stylesheets that reference
+// include/import.
+//
+// # Out of scope
+//
+// XSLT 2.0 / XPath 2.0 features are outside the XSLT 1.0 specification and are
+// not emulated: sequences and the XPath 2.0 data model, xsl:function,
+// xsl:for-each-group (grouping), schema-aware processing (xsl:import-schema, type
+// annotations) and tunnel parameters. This is a 1.0 processor.
 package xslt
 
 import "github.com/go-ruby-nokogiri/nokogiri"
