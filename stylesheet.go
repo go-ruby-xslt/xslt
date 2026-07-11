@@ -63,24 +63,24 @@ type keyDef struct {
 
 // attrSet is a compiled xsl:attribute-set.
 type attrSet struct {
-	name    string
-	uses    []string       // referenced attribute-set names
-	attrs   []*nokogiri.Node // xsl:attribute children
-	imprec  int
+	name   string
+	uses   []string         // referenced attribute-set names
+	attrs  []*nokogiri.Node // xsl:attribute children
+	imprec int
 }
 
 // outputDef captures the merged xsl:output declarations.
 type outputDef struct {
-	method     string
-	indent     bool
-	encoding   string
+	method      string
+	indent      bool
+	encoding    string
 	omitXMLDecl bool
-	version    string
-	standalone string
-	doctypePub string
-	doctypeSys string
-	mediaType  string
-	cdataElems map[string]bool
+	version     string
+	standalone  string
+	doctypePub  string
+	doctypeSys  string
+	mediaType   string
+	cdataElems  map[string]bool
 }
 
 // decimalFormat is one xsl:decimal-format (named or default).
@@ -112,17 +112,32 @@ func defaultDecimalFormat() *decimalFormat {
 	}
 }
 
-// ParseString compiles an XSLT stylesheet from its source text.
+// ParseString compiles an XSLT stylesheet from its source text. A stylesheet
+// that uses xsl:include or xsl:import needs a Resolver; use
+// [ParseStringWithResolver] for those.
 func ParseString(src string) (*Stylesheet, error) {
+	return ParseStringWithResolver(src, nil)
+}
+
+// ParseStringWithResolver compiles an XSLT stylesheet from its source text,
+// fetching any xsl:include / xsl:import references through r.
+func ParseStringWithResolver(src string, r Resolver) (*Stylesheet, error) {
 	doc, err := nokogiri.XML(src)
 	if err != nil {
 		return nil, fmt.Errorf("xslt: parse stylesheet: %w", err)
 	}
-	return Parse(doc)
+	return ParseWithResolver(doc, r)
 }
 
-// Parse compiles an already-parsed stylesheet document.
+// Parse compiles an already-parsed stylesheet document. A stylesheet that uses
+// xsl:include or xsl:import needs a Resolver; use [ParseWithResolver] for those.
 func Parse(doc *nokogiri.Document) (*Stylesheet, error) {
+	return ParseWithResolver(doc, nil)
+}
+
+// ParseWithResolver compiles an already-parsed stylesheet document, fetching any
+// xsl:include / xsl:import references through r.
+func ParseWithResolver(doc *nokogiri.Document, r Resolver) (*Stylesheet, error) {
 	root := documentElement(&doc.Node)
 	if root == nil {
 		return nil, fmt.Errorf("xslt: stylesheet has no root element")
@@ -139,8 +154,8 @@ func Parse(doc *nokogiri.Document) (*Stylesheet, error) {
 	}
 	// A stylesheet may be a literal-result-element stylesheet (a root element that
 	// is not xsl:stylesheet but carries xsl:version): wrap it as a single template
-	// matching "/".
-	if !isXSL(root) || (root.Name != "stylesheet" && root.Name != "transform") {
+	// matching "/". Such a stylesheet cannot carry xsl:include/xsl:import.
+	if !isStylesheetRoot(root) {
 		if v := root.Attribute("xsl:version"); v != "" {
 			t := &template{match: "/", priority: 0, hasPrio: true, body: wrapLiteralRoot(doc, root)}
 			s.templates = append(s.templates, t)
@@ -148,11 +163,153 @@ func Parse(doc *nokogiri.Document) (*Stylesheet, error) {
 		}
 		return nil, fmt.Errorf("xslt: root element is not xsl:stylesheet/transform")
 	}
-	if err := s.compileTop(root, 0); err != nil {
+	c := &compiler{s: s, resolver: r}
+	if err := c.compileModuleTree(root, ""); err != nil {
 		return nil, err
 	}
 	s.finalize()
 	return s, nil
+}
+
+// maxImportDepth bounds xsl:include / xsl:import recursion, guarding against a
+// cyclic import graph (a stylesheet that includes/imports itself, directly or
+// transitively).
+const maxImportDepth = 40
+
+// compiler carries the mutable state of compiling one stylesheet and everything
+// it pulls in through xsl:include / xsl:import.
+type compiler struct {
+	s        *Stylesheet
+	resolver Resolver
+	nextPrec int // next import precedence to assign (higher = higher precedence)
+	depth    int // include/import nesting, for cycle detection
+}
+
+// topElem is one top-level element of a flattened stylesheet module, paired with
+// the base URI of the stylesheet it came from (for resolving nested hrefs).
+type topElem struct {
+	node *nokogiri.Node
+	base string
+}
+
+// compileModuleTree compiles one node of the import tree: the stylesheet module
+// rooted at root (which spans all its xsl:include descendants), together with
+// everything it xsl:imports. Imported modules are compiled first and receive a
+// lower import precedence; this module is then assigned the next (higher)
+// precedence and its own declarations are compiled at that precedence. This
+// realises XSLT 1.0 import precedence (2.6.2): a stylesheet has higher precedence
+// than the ones it imports, and a later import has higher precedence than an
+// earlier one.
+func (c *compiler) compileModuleTree(root *nokogiri.Node, base string) error {
+	if err := c.enter(); err != nil {
+		return err
+	}
+	defer func() { c.depth-- }()
+
+	// Flatten the module: its own top-level elements with xsl:include spliced in.
+	elems, err := c.flattenModule(root, base)
+	if err != nil {
+		return err
+	}
+	// Phase 1: compile every imported module first, in document order, so each
+	// gets a lower precedence than this module.
+	for _, e := range elems {
+		if !isXSLNamed(e.node, "import") {
+			continue
+		}
+		impRoot, ib, rerr := c.fetch("import", e.node, e.base)
+		if rerr != nil {
+			return rerr
+		}
+		if cerr := c.compileModuleTree(impRoot, ib); cerr != nil {
+			return cerr
+		}
+	}
+	// Phase 2: this module's import precedence.
+	prec := c.nextPrec
+	c.nextPrec++
+	// Phase 3: compile this module's own top-level declarations at that precedence
+	// (xsl:include has already been flattened away; xsl:import handled in phase 1).
+	for _, e := range elems {
+		if isXSLNamed(e.node, "import") {
+			continue
+		}
+		if cerr := c.s.compileTopElement(e.node, prec); cerr != nil {
+			return cerr
+		}
+	}
+	return nil
+}
+
+// flattenModule returns the top-level xsl: elements of a stylesheet module in
+// document order, with each xsl:include replaced in place by the (recursively
+// flattened) top-level elements of the included stylesheet. Namespace
+// declarations of every stylesheet element visited are recorded for pattern
+// evaluation.
+func (c *compiler) flattenModule(root *nokogiri.Node, base string) ([]topElem, error) {
+	for _, d := range root.NamespaceDeclarations() {
+		if d.Prefix != "" {
+			c.s.nsMap[d.Prefix] = d.URI
+		}
+	}
+	var out []topElem
+	for ch := root.FirstChild(); ch != nil; ch = ch.Next() {
+		if !ch.IsElement() || ch.NsURI != xslNS {
+			continue // non-element nodes and top-level literals in another ns are ignored
+		}
+		if ch.Name != "include" {
+			out = append(out, topElem{node: ch, base: base})
+			continue
+		}
+		incRoot, ib, err := c.fetch("include", ch, base)
+		if err != nil {
+			return nil, err
+		}
+		if err := c.enter(); err != nil {
+			return nil, err
+		}
+		sub, err := c.flattenModule(incRoot, ib)
+		c.depth--
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sub...)
+	}
+	return out, nil
+}
+
+// enter deepens the include/import recursion and fails on runaway nesting.
+func (c *compiler) enter() error {
+	c.depth++
+	if c.depth > maxImportDepth {
+		return fmt.Errorf("xslt: xsl:include/xsl:import nested deeper than %d (cyclic import graph?)", maxImportDepth)
+	}
+	return nil
+}
+
+// fetch resolves the stylesheet referenced by an xsl:include / xsl:import element
+// and returns its document element plus the base URI to associate with it.
+func (c *compiler) fetch(kind string, node *nokogiri.Node, base string) (*nokogiri.Node, string, error) {
+	href := node.Attribute("href")
+	if href == "" {
+		return nil, "", fmt.Errorf("xslt: xsl:%s without href", kind)
+	}
+	if c.resolver == nil {
+		return nil, "", fmt.Errorf("xslt: xsl:%s href=%q but no Resolver configured (use ParseStringWithResolver/ParseWithResolver)", kind, href)
+	}
+	src, nb, err := c.resolver.Resolve(href, base)
+	if err != nil {
+		return nil, "", fmt.Errorf("xslt: resolve xsl:%s href=%q: %w", kind, href, err)
+	}
+	doc, err := nokogiri.XML(src)
+	if err != nil {
+		return nil, "", fmt.Errorf("xslt: parse xsl:%s href=%q: %w", kind, href, err)
+	}
+	r := documentElement(&doc.Node)
+	if !isStylesheetRoot(r) {
+		return nil, "", fmt.Errorf("xslt: xsl:%s href=%q: root is not xsl:stylesheet/transform", kind, href)
+	}
+	return r, nb, nil
 }
 
 // wrapLiteralRoot builds a synthetic xsl:template body wrapping a literal-result
@@ -163,29 +320,6 @@ func wrapLiteralRoot(doc *nokogiri.Document, root *nokogiri.Node) *nokogiri.Node
 	tmpl.NsURI = xslNS
 	tmpl.AddChild(root)
 	return tmpl
-}
-
-// compileTop walks the top-level children of an xsl:stylesheet element at the
-// given import precedence.
-func (s *Stylesheet) compileTop(root *nokogiri.Node, imprec int) error {
-	// Record namespace declarations on the stylesheet element for pattern eval.
-	for _, d := range root.NamespaceDeclarations() {
-		if d.Prefix != "" {
-			s.nsMap[d.Prefix] = d.URI
-		}
-	}
-	for c := root.FirstChild(); c != nil; c = c.Next() {
-		if !c.IsElement() {
-			continue
-		}
-		if c.NsURI != xslNS {
-			continue // top-level literal elements in another namespace are ignored
-		}
-		if err := s.compileTopElement(c, imprec); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *Stylesheet) compileTopElement(c *nokogiri.Node, imprec int) error {
@@ -207,11 +341,10 @@ func (s *Stylesheet) compileTopElement(c *nokogiri.Node, imprec int) error {
 		s.compileStripSpace(c, true)
 	case "preserve-space":
 		s.compileStripSpace(c, false)
-	case "include", "import":
-		// document() of an external stylesheet is deferred; a same-document
-		// include/import is not expressible without a resolver. Recorded as a no-op
-		// so a stylesheet that references them still compiles.
 	}
+	// xsl:include is flattened away and xsl:import handled before this point by the
+	// compiler's module-tree walk, so they never reach here; any other unrecognised
+	// top-level xsl: element is ignored per XSLT 2.2 (forwards-compatible).
 	return nil
 }
 
@@ -353,9 +486,9 @@ func (s *Stylesheet) finalize() {
 	}
 	sort.SliceStable(s.templates, func(i, j int) bool {
 		a, b := s.templates[i], s.templates[j]
-		// Conflict resolution: higher import precedence first (xsl:import is deferred,
-		// so imprec is 0 for all templates today and this key is neutral), then higher
-		// priority, then later document position (XSLT recovery for a true tie).
+		// Conflict resolution (XSLT 5.5): higher import precedence first (xsl:import
+		// gives imported templates a lower precedence), then higher priority, then
+		// later document position (XSLT recovery for a true tie).
 		if k := a.imprec - b.imprec; k != 0 {
 			return k > 0
 		}
@@ -407,4 +540,14 @@ func documentElement(n *nokogiri.Node) *nokogiri.Node {
 	return nil
 }
 
-func isXSL(n *nokogiri.Node) bool { return n.NsURI == xslNS }
+// isXSLNamed reports whether n is an XSLT-namespace element with the given local
+// name.
+func isXSLNamed(n *nokogiri.Node, name string) bool {
+	return n.NsURI == xslNS && n.Name == name
+}
+
+// isStylesheetRoot reports whether n is an xsl:stylesheet or xsl:transform
+// element (the two allowed roots of a stylesheet module).
+func isStylesheetRoot(n *nokogiri.Node) bool {
+	return n != nil && n.NsURI == xslNS && (n.Name == "stylesheet" || n.Name == "transform")
+}

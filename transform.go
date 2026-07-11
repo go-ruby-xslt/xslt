@@ -20,6 +20,12 @@ type transformer struct {
 	keyIdx map[string]map[string][]*nokogiri.Node // key name -> value -> nodes
 	idSeq  int
 	genIDs map[*nokogiri.Node]string
+	// curTmpl / curMode track the current template rule and mode, so xsl:apply-imports
+	// can re-apply only templates of strictly lower import precedence. They are set
+	// by apply-templates (and apply-imports), and left unchanged by call-template,
+	// which does not establish a current template rule (XSLT 5.4/5.6).
+	curTmpl *template
+	curMode string
 }
 
 // Transform applies the compiled stylesheet to src with the given parameters and
@@ -116,7 +122,13 @@ func (t *transformer) applyTemplatesTo(nodes []*nokogiri.Node, mode string, out 
 			t.builtinTemplate(n, mode, out)
 			continue
 		}
+		// Establish the current template rule and mode for the duration of this
+		// instantiation, so an xsl:apply-imports inside it re-applies only
+		// lower-precedence rules in the same mode.
+		prevT, prevM := t.curTmpl, t.curMode
+		t.curTmpl, t.curMode = tmpl, mode
 		t.instantiate(tmpl, n, i+1, size, out, withParams)
+		t.curTmpl, t.curMode = prevT, prevM
 	}
 }
 
@@ -155,6 +167,22 @@ func (t *transformer) builtinTemplate(n *nokogiri.Node, mode string, out *nokogi
 func (t *transformer) matchTemplate(n *nokogiri.Node, mode string) *template {
 	for _, tmpl := range t.ss.templates {
 		if tmpl.mode != mode {
+			continue
+		}
+		if t.patternMatches(tmpl.match, n) {
+			return tmpl
+		}
+	}
+	return nil
+}
+
+// matchImport returns the best template matching n in the given mode whose import
+// precedence is strictly below maxPrec, or nil. Because s.templates is pre-sorted
+// by precedence then priority then order, the first qualifying match is the one
+// xsl:apply-imports must instantiate.
+func (t *transformer) matchImport(n *nokogiri.Node, mode string, maxPrec int) *template {
+	for _, tmpl := range t.ss.templates {
+		if tmpl.mode != mode || tmpl.imprec >= maxPrec {
 			continue
 		}
 		if t.patternMatches(tmpl.match, n) {

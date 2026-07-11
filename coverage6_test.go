@@ -91,15 +91,37 @@ func TestLiteralXSLAttribute(t *testing.T) {
 // --- stylesheet with comments + include/import + non-xsl top-level ----------
 
 func TestStylesheetMiscTopLevel(t *testing.T) {
+	// The main stylesheet mixes a comment, an xsl:include, an xsl:import, a
+	// top-level literal in another namespace (ignored), an xsl:output and its own
+	// template. The include splices its template at the same precedence; the import
+	// provides a lower-precedence template for <a> that the main template overrides.
 	xsl := `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:d="urn:d">` +
 		`<!-- a comment -->` +
-		`<xsl:include href="x.xsl"/>` +
 		`<xsl:import href="y.xsl"/>` +
+		`<xsl:include href="x.xsl"/>` +
 		`<d:data>ignored</d:data>` +
 		`<xsl:output method="xml" omit-xml-declaration="yes"/>` +
-		`<xsl:template match="/"><r>ok</r></xsl:template>` +
+		`<xsl:template match="/"><r><xsl:apply-templates select="d/*"/></r></xsl:template>` +
+		`<xsl:template match="a">A-main</xsl:template>` +
 		`</xsl:stylesheet>`
-	if got := mustApply(t, xsl, `<d/>`, nil); got != `<r>ok</r>` {
+	res := MapResolver{
+		// included at the same import precedence as the main stylesheet
+		"x.xsl": `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">` +
+			`<xsl:template match="b">B-included</xsl:template></xsl:stylesheet>`,
+		// imported at a lower import precedence (overridden for <a>)
+		"y.xsl": `<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">` +
+			`<xsl:template match="a">A-imported</xsl:template>` +
+			`<xsl:template match="c">C-imported</xsl:template></xsl:stylesheet>`,
+	}
+	ss, err := ParseStringWithResolver(xsl, res)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	got, err := ss.Apply(mustXML(t, `<d><a/><b/><c/></d>`), nil)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if got != `<r>A-mainB-includedC-imported</r>` {
 		t.Fatalf("misc top-level: %q", got)
 	}
 }

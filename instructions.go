@@ -341,10 +341,27 @@ func (t *transformer) applyAttributeSets(names string, node, out *nokogiri.Node)
 	}
 }
 
-// doApplyImports re-applies templates of lower import precedence than the current
-// one. Without multi-document import we fall back to the built-in rule.
+// doApplyImports re-applies the current node against templates of strictly lower
+// import precedence than the current template rule, in the current mode (XSLT
+// 5.6). With no current template rule, or no lower-precedence template that
+// matches, it falls back to the built-in template rule.
 func (t *transformer) doApplyImports(c, node *nokogiri.Node, pos, size int, out *nokogiri.Node) {
-	t.builtinTemplate(node, "", out)
+	cur := t.curTmpl
+	if cur == nil {
+		t.builtinTemplate(node, t.curMode, out)
+		return
+	}
+	tmpl := t.matchImport(node, t.curMode, cur.imprec)
+	if tmpl == nil {
+		t.builtinTemplate(node, t.curMode, out)
+		return
+	}
+	// The current template rule becomes the imported one for the nested
+	// instantiation; the mode is unchanged. apply-imports passes no parameters.
+	prevT := t.curTmpl
+	t.curTmpl = tmpl
+	t.instantiate(tmpl, node, pos, size, out, nil)
+	t.curTmpl = prevT
 }
 
 // evalVariable produces the value of a variable/param: the select expression, or
