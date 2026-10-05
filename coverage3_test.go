@@ -75,14 +75,14 @@ func TestExplicitPriority(t *testing.T) {
 
 func TestDefaultPriorityVariants(t *testing.T) {
 	cases := map[string]float64{
-		"*":          -0.5,
-		"text()":     -0.5,
-		"h:*":        -0.25,
-		"a":          0,
-		"@id":        0,
-		"a/b":        0.5,
-		"a[@x]":      0.5,
-		"/":          0.5,
+		"*":      -0.5,
+		"text()": -0.5,
+		"h:*":    -0.25,
+		"a":      0,
+		"@id":    0,
+		"a/b":    0.5,
+		"a[@x]":  0.5,
+		"/":      0.5,
 	}
 	for pat, want := range cases {
 		if got := defaultPriority(pat); got != want {
