@@ -13,10 +13,10 @@ import (
 
 // sortKey is one compiled xsl:sort spec.
 type sortKey struct {
-	sel        string
-	dataType   string // "text" (default) or "number"
-	order      string // "ascending" (default) or "descending"
-	caseOrder  string // "upper-first" / "lower-first"
+	sel       string
+	dataType  string // "text" (default) or "number"
+	order     string // "ascending" (default) or "descending"
+	caseOrder string // "upper-first" / "lower-first"
 }
 
 // applySorts reorders nodes per the xsl:sort children of instr (apply-templates

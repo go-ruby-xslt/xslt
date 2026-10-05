@@ -82,16 +82,16 @@ func TestGenerateID(t *testing.T) {
 
 func TestSystemAndAvailable(t *testing.T) {
 	cases := map[string]string{
-		`<r><xsl:value-of select="system-property('xsl:version')"/></r>`:     `<r>1</r>`,
-		`<r><xsl:value-of select="system-property('xsl:vendor')"/></r>`:      `<r>go-ruby-xslt</r>`,
-		`<r><xsl:value-of select="system-property('xsl:vendor-url')"/></r>`:  `<r>https://github.com/go-ruby-xslt/xslt</r>`,
-		`<r><xsl:value-of select="system-property('unknown')"/></r>`:         `<r/>`,
-		`<r><xsl:value-of select="function-available('key')"/></r>`:          `<r>true</r>`,
-		`<r><xsl:value-of select="function-available('nope')"/></r>`:         `<r>false</r>`,
-		`<r><xsl:value-of select="element-available('xsl:if')"/></r>`:        `<r>true</r>`,
-		`<r><xsl:value-of select="element-available('nope')"/></r>`:          `<r>false</r>`,
-		`<r><xsl:value-of select="unparsed-entity-uri('x')"/></r>`:           `<r/>`,
-		`<r n="{count(document('x'))}"/>`:                                    `<r n="0"/>`,
+		`<r><xsl:value-of select="system-property('xsl:version')"/></r>`:    `<r>1</r>`,
+		`<r><xsl:value-of select="system-property('xsl:vendor')"/></r>`:     `<r>go-ruby-xslt</r>`,
+		`<r><xsl:value-of select="system-property('xsl:vendor-url')"/></r>`: `<r>https://github.com/go-ruby-xslt/xslt</r>`,
+		`<r><xsl:value-of select="system-property('unknown')"/></r>`:        `<r/>`,
+		`<r><xsl:value-of select="function-available('key')"/></r>`:         `<r>true</r>`,
+		`<r><xsl:value-of select="function-available('nope')"/></r>`:        `<r>false</r>`,
+		`<r><xsl:value-of select="element-available('xsl:if')"/></r>`:       `<r>true</r>`,
+		`<r><xsl:value-of select="element-available('nope')"/></r>`:         `<r>false</r>`,
+		`<r><xsl:value-of select="unparsed-entity-uri('x')"/></r>`:          `<r/>`,
+		`<r n="{count(document('x'))}"/>`:                                   `<r n="0"/>`,
 	}
 	for body, want := range cases {
 		if got := mustApply(t, wrap(body), `<d/>`, nil); got != want {
