@@ -2,6 +2,6 @@ module github.com/go-ruby-xslt/xslt
 
 go 1.27.1
 
-require github.com/go-ruby-nokogiri/nokogiri v0.0.0-20260916095731-6d8e6e6bb882
+require github.com/go-ruby-nokogiri/nokogiri v0.0.0-20261012125503-f0e22d591098
 
-require golang.org/x/net v0.59.0 // indirect
+require golang.org/x/net v0.61.0 // indirect

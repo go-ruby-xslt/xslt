@@ -1,4 +1,8 @@
 github.com/go-ruby-nokogiri/nokogiri v0.0.0-20260916095731-6d8e6e6bb882 h1:IRzl4AesG7uv2cyj5gSnd68W5uGadRCqRUeIf8TWGfY=
 github.com/go-ruby-nokogiri/nokogiri v0.0.0-20260916095731-6d8e6e6bb882/go.mod h1:AA4iSU3ERuIUo3dkozNL/pL0VjVtAf5PDkSaJNLD9mc=
+github.com/go-ruby-nokogiri/nokogiri v0.0.0-20261012125503-f0e22d591098 h1:WQTk021mKNsJZsqMb97GsD4CSmC5+d7bAxvTxsgt29M=
+github.com/go-ruby-nokogiri/nokogiri v0.0.0-20261012125503-f0e22d591098/go.mod h1:s+Pav5MqpYTdEnUDB5hXFGickpcD3T1K5eyDy1mmLa0=
 golang.org/x/net v0.59.0 h1:5zfYln+w5XCxwrnMMJPufRgNoXEaGxl0wo5GqPXyues=
 golang.org/x/net v0.59.0/go.mod h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg=
+golang.org/x/net v0.61.0 h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=
+golang.org/x/net v0.61.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=
